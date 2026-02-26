@@ -63,7 +63,7 @@ def ma_crossover_position(close_prices, fast_window, slow_window):
 
     # Generate signals: 1 for long, -1 for short, 0 for no position
     signal = pd.Series(0, index=close_prices.index, dtype=int)
-    signal[fast_ma > slow_ma] = 1 # Long-only signal 1 = log, 0 = flat
+    signal[(fast_ma > slow_ma)] = 1 # Long-only signal 1 = log, 0 = flat
 
     position = signal.copy()
 
