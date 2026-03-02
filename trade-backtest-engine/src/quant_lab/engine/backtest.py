@@ -3,7 +3,7 @@ import pandas as pd
 from quant_lab.features.indicators import sma, ema, rolling_volatility, simple_returns, log_returns
 
 
-def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_trade: float = 0.0) -> pd.DataFrame:
+def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_trade: float = 0.001, borrow_cost: float = 0.005) -> pd.DataFrame:
     # --- Type checks ---
     if not isinstance(close_prices, pd.Series):
         raise TypeError("close_prices must be a pandas Series")
@@ -18,6 +18,10 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
     # --- Cost per trade check ---
     if not (0.0 <= cost_per_trade < 1.0):
         raise ValueError("cost_per_trade must be in [0, 1)")
+    
+    # --- Borrow cost check ---
+    if not (0.0 <= borrow_cost < 1.0):
+        raise ValueError("borrow_cost must be in [0, 1)")
 
     # --- Empty data check ---
     if close_prices.empty:
@@ -26,7 +30,7 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
     if position.empty:
         raise ValueError("position is empty")
     
-    allowed = {0, 1}
+    allowed = {-1, 0, 1}  # Allow short (-1), no position (0), and long (1)
     values = set(position.dropna().unique())
     if not values.issubset(allowed):
         raise ValueError(f"position contains invalid values: {values - allowed}")
@@ -37,9 +41,11 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
     trade = (position - position_shifted).abs()  # Identify trades (changes in position)
     cost_log = trade * np.log(1-cost_per_trade)  # Log cost of trading
     raw_strat = position_shifted * log_ret  # Raw strategy returns without costs
-    strat_log = raw_strat + cost_log  # Strategy returns after accounting for costs
+    borrow_log = (position_shifted < 0) * np.log(1 - borrow_cost/252)  # Daily financing cost for shorts
+    strat_log = raw_strat + cost_log + borrow_log  # Strategy returns after accounting for costs and borrow fees
     cum_log = strat_log.cumsum()  # Cumulative log returns 
     equity = np.exp(cum_log)  # Equity curve from cumulative log returns
+    drawdown = (equity / equity.cummax() - 1)  # Drawdown from peak
 
     bt = {
         'close': close_prices,
@@ -48,8 +54,10 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
         'position_shifted': position_shifted,
         'trade': trade,
         'cost_log': cost_log,
+        'borrow_log': borrow_log,
         'strat_log': strat_log,
-        'equity': equity
+        'equity': equity,
+        'drawdown': drawdown
 
     }
     
