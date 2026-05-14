@@ -3,7 +3,7 @@ import pandas as pd
 from quant_lab.features.indicators import sma, ema, rolling_volatility, simple_returns, log_returns
 
 
-def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_trade: float = 0.001, borrow_cost: float = 0.005) -> pd.DataFrame:
+def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_trade: float = 0.0, borrow_cost: float = 0.0) -> pd.DataFrame:
     # --- Type checks ---
     if not isinstance(close_prices, pd.Series):
         raise TypeError("close_prices must be a pandas Series")

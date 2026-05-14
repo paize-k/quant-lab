@@ -19,14 +19,19 @@ def ma_crossover_position(close_prices, fast_window, slow_window):
     if fast_window >= slow_window:
         raise ValueError("Fast window must be smaller than slow window for a valid crossover strategy.")
 
+    # 1. Calculate MAs
     fast_ma = sma(close_prices, fast_window)
     slow_ma = sma(close_prices, slow_window)
 
-    # Generate signals: 1 for long, -1 for short
-    signal = pd.Series(0, index=close_prices.index, dtype=int)
-    signal[(fast_ma > slow_ma)] = 1 # Long position when fast MA is above slow MA
-    signal[(fast_ma < slow_ma)] = -1 # Short position when fast MA is below slow MA
+    # 2. Generate Raw Signal
+    # Logic: 1 if Fast > Slow, -1 if Fast < Slow, else 0
+    signal = np.where(fast_ma < slow_ma, 1, 0)  # Start with long/flat signal
+    signal = np.where(fast_ma > slow_ma, -1, signal)
+    
+    # Convert to Series to keep index alignment
+    position = pd.Series(signal, index=close_prices.index)
 
-    position = signal.copy()
+    # 3. Handle Warm-up: Set signals to 0 where slow_ma is NaN
+    position[slow_ma.isna()] = 0
 
     return position

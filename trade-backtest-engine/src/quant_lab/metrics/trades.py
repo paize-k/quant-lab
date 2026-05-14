@@ -11,6 +11,7 @@ def generate_trade_log(bt: pd.DataFrame) -> pd.DataFrame:
     Returns:
     - A DataFrame containing a log of trades executed, including entry and exit points, position sizes, and timestamps.
     """
+
     close = bt["close"] 
     position = bt["position"]
     position_shifted = bt["position_shifted"]  # Shift position to align with returns
@@ -22,4 +23,15 @@ def generate_trade_log(bt: pd.DataFrame) -> pd.DataFrame:
     exit_times  = bt.index[exit_signal]
 
     print("entries:", len(entry_times), "exits:", len(exit_times))
-    return entry_times, exit_times
+
+    tl = {
+        "Entry Time": entry_times,
+        "Exit Time": exit_times,
+        "Position Size": position[entry_signal].values,  # Assuming position size is 1 for long entries
+        "Entry Price": close[entry_signal].values,
+        "Exit Price": close[exit_signal].values
+    }
+
+    tl = pd.DataFrame(tl)
+
+    return tl
