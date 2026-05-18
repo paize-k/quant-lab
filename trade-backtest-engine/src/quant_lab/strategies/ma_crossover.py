@@ -23,15 +23,14 @@ def ma_crossover_position(close_prices, fast_window, slow_window):
     fast_ma = sma(close_prices, fast_window)
     slow_ma = sma(close_prices, slow_window)
 
-    # 2. Generate Raw Signal
-    # Logic: 1 if Fast > Slow, -1 if Fast < Slow, else 0
-    signal = np.where(fast_ma < slow_ma, 1, 0)  # Start with long/flat signal
-    signal = np.where(fast_ma > slow_ma, -1, signal)
-    
-    # Convert to Series to keep index alignment
-    position = pd.Series(signal, index=close_prices.index)
+    # Correct: fast > slow → long, fast < slow → short
+    position = pd.Series(
+        np.sign(fast_ma - slow_ma),   # +1, -1, or 0
+        index=close_prices.index,
+        dtype=float
+    )
 
-    # 3. Handle Warm-up: Set signals to 0 where slow_ma is NaN
-    position[slow_ma.isna()] = 0
+    # Flat during warm-up (slow MA not yet defined)
+    position[slow_ma.isna()] = 0.0
 
     return position

@@ -35,6 +35,10 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
     if not values.issubset(allowed):
         raise ValueError(f"position contains invalid values: {values - allowed}")
 
+    close_prices = close_prices.astype(float)
+    position = position.astype(float)
+
+
 
     log_ret = log_returns(close_prices)  # Calculate log returns, dropping NaN values from the start
     position_shifted = position.shift(1).fillna(0)  # Shift position to align with returns
@@ -42,7 +46,7 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
     cost_log = trade * np.log(1-cost_per_trade)  # Log cost of trading
     raw_strat = position_shifted * log_ret  # Raw strategy returns without costs
     borrow_log = (position_shifted < 0) * np.log(1 - borrow_cost/252)  # Daily financing cost for shorts
-    strat_log = raw_strat + cost_log + borrow_log  # Strategy returns after accounting for costs and borrow fees
+    strat_log = (raw_strat + cost_log + borrow_log).fillna(0.0)  # Strategy returns after accounting for costs and borrow fees
     cum_log = strat_log.cumsum()  # Cumulative log returns 
     equity = np.exp(cum_log)  # Equity curve from cumulative log returns
     drawdown = (equity / equity.cummax() - 1)  # Drawdown from peak
