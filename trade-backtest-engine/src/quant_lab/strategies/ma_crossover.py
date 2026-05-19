@@ -20,8 +20,8 @@ def ma_crossover_position(close_prices, fast_window, slow_window):
         raise ValueError("Fast window must be smaller than slow window for a valid crossover strategy.")
 
     # 1. Calculate MAs
-    fast_ma = sma(close_prices, fast_window)
-    slow_ma = sma(close_prices, slow_window)
+    fast_ma = ema(close_prices, fast_window)
+    slow_ma = ema(close_prices, slow_window)
 
     # Correct: fast > slow → long, fast < slow → short
     position = pd.Series(

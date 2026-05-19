@@ -88,7 +88,7 @@ def generate_trade_log(bt: pd.DataFrame, vol_window: int = 20, trend_window: int
         "Entry Price":  paired_entry_prices,
         "Exit Price":   paired_exit_prices,
         "Log Return":   log_return,
-        "Return %": (np.exp(log_return - 1) * 100),  # To be calculated
+        "Return %": (np.exp(log_return) - 1) * 100,  # To be calculated
         "Duration Bars": holding_bars,
         "Duration Days": [(exit - entry).days for entry, exit in zip(paired_entries, paired_exits)],
         "Trend Strength": trend_at_entry,

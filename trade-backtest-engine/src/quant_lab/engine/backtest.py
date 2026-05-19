@@ -43,7 +43,7 @@ def backtest_log_returns(close_prices: pd.Series, position: pd.Series, cost_per_
     log_ret = log_returns(close_prices)  # Calculate log returns, dropping NaN values from the start
     position_shifted = position.shift(1).fillna(0)  # Shift position to align with returns
     trade = (position - position_shifted).abs()  # Identify trades (changes in position)
-    cost_log = trade * np.log(1-cost_per_trade)  # Log cost of trading
+    cost_log = np.abs(trade) * np.log(1-cost_per_trade)  # Log cost of trading
     raw_strat = position_shifted * log_ret  # Raw strategy returns without costs
     borrow_log = (position_shifted < 0) * np.log(1 - borrow_cost/252)  # Daily financing cost for shorts
     strat_log = (raw_strat + cost_log + borrow_log).fillna(0.0)  # Strategy returns after accounting for costs and borrow fees

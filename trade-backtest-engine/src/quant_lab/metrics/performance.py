@@ -18,26 +18,27 @@ def evaluate_performance(bt: pd.DataFrame, periods_per_year: int = 252):
     years = len(bt) / periods_per_year
 
     returns = bt["strat_log"].dropna()  # Strategy returns after costs
-    total_return = equity.iloc[-1] / equity.iloc[0] - 1
-    CAGR = (equity.iloc[-1] / equity.iloc[0]) ** (1.0 / years) - 1 if years > 0 else 0
+    total_return = float(equity.iloc[-1] / equity.iloc[0] - 1)
+    CAGR = float((equity.iloc[-1] / equity.iloc[0]) ** (1.0 / years) - 1 if years > 0 else 0)
     annualized_return = CAGR
 
     mu = returns.mean()
     sigma = returns.std(ddof=1)
     rfr = 0.0  # Risk-free rate, can be adjusted as needed
 
-    vol = sigma * np.sqrt(periods_per_year)  # Annualized volatility
-    sharpe_ratio = (mu/ sigma) * np.sqrt(periods_per_year) if sigma > 0 else np.nan
+    vol = float(sigma * np.sqrt(periods_per_year)) if sigma > 0 else 0.0  # Annualized volatility
+    sharpe_ratio = float((mu/ sigma) * np.sqrt(periods_per_year) if sigma > 0 else np.nan)
 
     peak = equity.cummax()
     drawdown = (equity - peak) / peak
-    max_drawdown = drawdown.min()
+    max_drawdown = float(drawdown.min())
 
-    total_trades = bt["trade"].sum()
-    
+    total_trades = int(np.abs(bt["trade"]).sum())
+
     performance_metrics = {
         "Total Return": total_return,
         "Annualized Return": annualized_return,
+        "Equity": float(equity.iloc[-1]),
         "Volatility": vol,
         "Sharpe Ratio": sharpe_ratio,
         "Max Drawdown": max_drawdown,
