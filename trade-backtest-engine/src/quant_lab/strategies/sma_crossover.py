@@ -2,10 +2,10 @@ import numpy as np
 import pandas as pd
 from quant_lab.features.indicators import sma, ema, rolling_volatility, simple_returns, log_returns
 
-def ma_crossover_position(close_prices, fast_window, slow_window):
+def sma_crossover_position(close_prices, fast_window, slow_window):
     """
-    Generate trading positions based on moving average crossover strategy.
-    Returns a Series where 1 indicates a long position and 0 indicates no position and -1 indicates a short position (if implemented). The position is determined by the crossover of the fast and slow moving averages.
+    Generate trading positions based on simple moving average crossover strategy.
+    Returns a Series where 1 indicates a long position and 0 indicates no position and -1 indicates a short position (if implemented). The position is determined by the crossover of the fast and slow simple moving averages.
     """
 
     if isinstance(close_prices, pd.DataFrame):
@@ -18,10 +18,10 @@ def ma_crossover_position(close_prices, fast_window, slow_window):
     
     if fast_window >= slow_window:
         raise ValueError("Fast window must be smaller than slow window for a valid crossover strategy.")
-
+    
     # 1. Calculate MAs
-    fast_ma = ema(close_prices, fast_window)
-    slow_ma = ema(close_prices, slow_window)
+    fast_ma = sma(close_prices, fast_window)
+    slow_ma = sma(close_prices, slow_window)
 
     # Correct: fast > slow → long, fast < slow → short
     position = pd.Series(
