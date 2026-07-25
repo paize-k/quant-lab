@@ -119,4 +119,5 @@ def evaluate_trades(tl: pd.DataFrame) -> pd.Series:
         "Best Trade %":    best_trade,
         "Worst Trade %":   worst_trade,
     })
+    
     return tm

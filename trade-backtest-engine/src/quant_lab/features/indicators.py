@@ -7,7 +7,6 @@ def simple_returns(prices: pd.Series) -> pd.Series:
     """
     return prices.pct_change().dropna()
 
-
 def log_returns(prices: pd.Series) -> pd.Series:
     """
     Log returns: r_t = ln(P_t / P_{t-1})

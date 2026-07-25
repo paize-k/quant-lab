@@ -32,7 +32,7 @@ def evaluate_performance(bt: pd.DataFrame, asset_log_returns: pd.Series, periods
 
     total_trades = int(np.abs(bt["trade"]).sum())
 
-    # --- 🚀 BASELINE BUY & HOLD SHARPE CALCULATION ---
+    # BASELINE BUY & HOLD SHARPE CALCULATION 
     # Align the asset returns to match the exact backtest time frame
     clean_asset_returns = asset_log_returns.loc[returns.index].dropna()
     
@@ -40,7 +40,6 @@ def evaluate_performance(bt: pd.DataFrame, asset_log_returns: pd.Series, periods
     asset_sigma = clean_asset_returns.std(ddof=1)
     
     baseline_sharpe = float((asset_mu / asset_sigma) * np.sqrt(periods_per_year) if asset_sigma > 0 else np.nan)
-    # ------------------------------------------------
 
     performance_metrics = {
         "Total Return": total_return,
@@ -48,7 +47,7 @@ def evaluate_performance(bt: pd.DataFrame, asset_log_returns: pd.Series, periods
         "Equity": float(equity.iloc[-1]),
         "Volatility": vol,
         "Strategy Sharpe Ratio": sharpe_ratio,
-        "Baseline Sharpe Ratio": baseline_sharpe,  # Added here
+        "Baseline Sharpe Ratio": baseline_sharpe,
         "Max Drawdown": max_drawdown,
         "Total Trades Executed": total_trades
     }
