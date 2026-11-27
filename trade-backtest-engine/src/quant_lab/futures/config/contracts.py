@@ -1,10 +1,10 @@
 """CME futures contract specifications.
 
 Tick sizes, tick values and contract months come from the CME contract
-specs. **Margins and fees are placeholders**: CME changes margins often and
-commissions depend on your broker, so check them against your broker before
-trusting any backtest or sizing number. Override per run with
-``dataclasses.replace(get_contract("MES"), initial_margin=...)``.
+specs and are fixed by the exchange. Commissions, fees and margins depend on
+the broker, so they live in a ``FuturesBrokerProfile`` (see ``fees.py``) and
+are applied by ``get_contract(symbol, profile)``. The default profile is the
+conservative ``PAPER_DEFAULT``; swap in your broker's profile once you have one.
 """
 
 from __future__ import annotations
@@ -12,9 +12,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import date
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 from quant_lab.core.sizing import size_by_risk
+from quant_lab.futures.config.fees import PAPER_DEFAULT, FuturesBrokerProfile
 
 MONTH_CODES: Dict[str, int] = {
     "F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
@@ -32,12 +33,14 @@ class FuturesContractSpec:
     contract_months: Tuple[str, ...]  # month codes that are traded/rolled, e.g. ("H","M","U","Z")
     sessions_key: str              # key into futures.config.sessions.SESSIONS
     currency: str = "USD"
-    initial_margin: float = 0.0    # USD per contract (overnight), placeholder
+    # Broker-dependent values, filled in from a FuturesBrokerProfile.
+    initial_margin: float = 0.0    # USD per contract to hold overnight
     maintenance_margin: float = 0.0
-    intraday_margin: float = 0.0   # broker day-trade margin, placeholder; 0 = use initial
+    intraday_margin: float = 0.0   # broker day-trade margin; 0 = use initial
     commission_per_side: float = 0.0   # broker commission per contract per side
-    exchange_fee_per_side: float = 0.0
-    regulatory_fee_per_side: float = 0.0  # NFA etc.
+    exchange_fee_per_side: float = 0.0    # CME/COMEX non-member fee
+    regulatory_fee_per_side: float = 0.0  # NFA fee
+    clearing_fee_per_side: float = 0.0
     slippage_ticks: float = 1.0    # min slippage applied to market orders, per side
     roll_days_before_expiry: int = 8   # default roll offset for the continuous series
 
@@ -74,7 +77,8 @@ class FuturesContractSpec:
     # ---- friction --------------------------------------------------------
     @property
     def fees_per_side(self) -> float:
-        return self.commission_per_side + self.exchange_fee_per_side + self.regulatory_fee_per_side
+        return (self.commission_per_side + self.exchange_fee_per_side
+                + self.regulatory_fee_per_side + self.clearing_fee_per_side)
 
     def round_trip_fees(self, contracts: float) -> float:
         return 2.0 * self.fees_per_side * abs(contracts)
@@ -130,40 +134,31 @@ class FuturesContractSpec:
 
 _QUARTERLY = ("H", "M", "U", "Z")
 
+# Exchange-defined specs only. Fees and margins come from a broker profile.
 CONTRACTS: Dict[str, FuturesContractSpec] = {
     "MES": FuturesContractSpec(
         symbol="MES", name="Micro E-mini S&P 500", exchange="CME",
-        tick_size=0.25, tick_value=1.25, contract_months=_QUARTERLY,
-        sessions_key="cme_equity",
-        initial_margin=2_400.0, maintenance_margin=2_200.0, intraday_margin=50.0,
-        commission_per_side=0.25, exchange_fee_per_side=0.35, regulatory_fee_per_side=0.02,
-    ),
+        tick_size=0.25, tick_value=1.25, contract_months=_QUARTERLY, sessions_key="cme_equity"),
     "MNQ": FuturesContractSpec(
         symbol="MNQ", name="Micro E-mini Nasdaq-100", exchange="CME",
-        tick_size=0.25, tick_value=0.50, contract_months=_QUARTERLY,
-        sessions_key="cme_equity",
-        initial_margin=3_500.0, maintenance_margin=3_200.0, intraday_margin=100.0,
-        commission_per_side=0.25, exchange_fee_per_side=0.35, regulatory_fee_per_side=0.02,
-    ),
+        tick_size=0.25, tick_value=0.50, contract_months=_QUARTERLY, sessions_key="cme_equity"),
     "MGC": FuturesContractSpec(
         symbol="MGC", name="Micro Gold", exchange="COMEX",
         tick_size=0.10, tick_value=1.00, contract_months=("G", "J", "M", "Q", "V", "Z"),
-        sessions_key="cme_metals",
-        initial_margin=1_800.0, maintenance_margin=1_650.0, intraday_margin=100.0,
-        commission_per_side=0.25, exchange_fee_per_side=0.60, regulatory_fee_per_side=0.02,
-    ),
+        sessions_key="cme_metals"),
     "6E": FuturesContractSpec(
         symbol="6E", name="Euro FX", exchange="CME",
-        tick_size=0.00005, tick_value=6.25, contract_months=_QUARTERLY,
-        sessions_key="cme_fx",
-        initial_margin=2_700.0, maintenance_margin=2_450.0, intraday_margin=500.0,
-        commission_per_side=0.85, exchange_fee_per_side=1.60, regulatory_fee_per_side=0.02,
-    ),
+        tick_size=0.00005, tick_value=6.25, contract_months=_QUARTERLY, sessions_key="cme_fx"),
 }
 
 
-def get_contract(symbol: str) -> FuturesContractSpec:
+def get_contract(symbol: str, profile: Optional[FuturesBrokerProfile] = PAPER_DEFAULT) -> FuturesContractSpec:
+    """Contract spec with ``profile``'s fees and margins applied.
+
+    Pass ``profile=None`` for the bare exchange spec (zero fees and margins).
+    """
     try:
-        return CONTRACTS[symbol.upper()]
+        spec = CONTRACTS[symbol.upper()]
     except KeyError:
         raise KeyError(f"unknown futures contract {symbol!r}; known: {sorted(CONTRACTS)}") from None
+    return spec if profile is None else profile.apply(spec)

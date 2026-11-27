@@ -1,10 +1,12 @@
+from dataclasses import replace
 from datetime import date, datetime, timezone
 
 import pytest
 
 from quant_lab.core import InstrumentSpec
 from quant_lab.forex.config import (
-    ForexRiskLimits, LONDON_NY_OVERLAP, ASIAN, get_pair, is_rollover_window,
+    ASIAN, LONDON_NY_OVERLAP, PAIRS, PAPER_DEFAULT, ForexCostProfile, ForexRiskLimits, PairCosts,
+    get_pair, is_rollover_window,
 )
 
 
@@ -33,7 +35,7 @@ def test_units_for_risk_rounded_to_lot():
     eur = get_pair("EUR_USD")
     # $10k * 1% / (20 pips * $0.0001) = 50,000 units
     assert eur.units_for_risk(10_000, 0.01, 20, "USD", 1.08) == 50_000
-    micro = type(eur)(**{**eur.__dict__, "lot_step": 1_000, "min_units": 1_000})
+    micro = replace(eur, lot_step=1_000, min_units=1_000)
     assert micro.units_for_risk(10_000, 0.01, 23, "USD", 1.08) == 43_000
     assert micro.units_for_risk(10, 0.01, 23, "USD", 1.08) == 0
 
@@ -43,11 +45,30 @@ def test_short_pnl_sign():
 
 
 def test_triple_swap_wednesday():
-    p = type(get_pair("EUR_USD"))(**{**get_pair("EUR_USD").__dict__, "swap_long_pips": -0.5})
-    assert p.swap_nights(date(2026, 11, 25)) == 3   # Wednesday
-    assert p.swap_nights(date(2026, 11, 24)) == 1
-    assert p.swap_nights(date(2026, 11, 28)) == 0   # Saturday
-    assert p.swap_pips(+1, date(2026, 11, 25)) == pytest.approx(-1.5)
+    eur = get_pair("EUR_USD")  # paper default: long -$8.83 per 100k per night
+    assert eur.swap_nights(date(2026, 11, 25)) == 3   # Wednesday
+    assert eur.swap_nights(date(2026, 11, 24)) == 1
+    assert eur.swap_nights(date(2026, 11, 28)) == 0   # Saturday
+    assert eur.swap_amount(+1, 10_000, date(2026, 11, 25)) == pytest.approx(-0.883 * 3)
+    assert eur.swap_amount(-1, 100_000, date(2026, 11, 24)) == pytest.approx(2.33)
+
+
+def test_paper_default_costs():
+    eur = get_pair("EUR_USD")
+    assert eur.typical_spread_pips == 1.6 and eur.margin_rate == 0.02
+    assert eur.spread_pips(in_rollover=True) == pytest.approx(4.8)
+    assert eur.commission(100_000) == 0
+    assert set(PAPER_DEFAULT.costs) == set(PAIRS)
+    bare = get_pair("EUR_USD", profile=None)
+    assert bare.typical_spread_pips == 0 and bare.swap_long_per_100k == 0
+
+
+def test_custom_profile_swaps_in():
+    core = ForexCostProfile("core", "2026-11-27", "USD", {"EUR_USD": PairCosts(0.4, -9.0, 2.0, 0.5)})
+    eur = get_pair("EUR_USD", profile=core)
+    assert eur.commission(100_000) == pytest.approx(10.0)  # $0.50/10k/side, round trip
+    with pytest.raises(KeyError):
+        get_pair("GBP_USD", profile=core)
 
 
 def test_sessions():

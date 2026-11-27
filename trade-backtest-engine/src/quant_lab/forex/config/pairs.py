@@ -1,10 +1,10 @@
 """Spot FX pair specifications.
 
-Pip sizes are market convention (0.0001, or 0.01 for JPY quotes). Typical
-spreads, swap rates and margin rates are **placeholders**: they vary by
-broker and change daily, so load real values from your broker before relying
-on a backtest. Swaps are expressed in pips per unit per night, so they scale
-with position size the same way price P&L does.
+Pip sizes and quote precision are market convention (0.0001, or 0.01 for JPY
+quotes). Spreads, commission, swap rates and margin depend on the broker and
+change daily, so they live in a ``ForexCostProfile`` (see ``costs.py``) and
+are applied by ``get_pair(symbol, profile)``. The default profile is the
+conservative ``PAPER_DEFAULT``.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from datetime import date
 from typing import Dict, Mapping, Optional
 
 from quant_lab.core.sizing import floor_to_step, size_by_risk
+from quant_lab.forex.config.costs import PAPER_DEFAULT, ForexCostProfile
 
 
 @dataclass(frozen=True)
@@ -25,11 +26,14 @@ class ForexPairSpec:
     price_precision: int          # quoted decimals (fractional pips), e.g. 5 or 3
     lot_step: float = 1.0         # 1 for OANDA units, 1_000 for micro lots
     min_units: float = 1.0
-    margin_rate: float = 0.0333   # placeholder (30:1)
-    typical_spread_pips: float = 1.0      # placeholder normal-hours spread
-    rollover_spread_multiplier: float = 3.0  # spread widening 21:00-23:00 UTC
-    swap_long_pips: float = 0.0   # financing per unit per night, in pips (+ = credit)
-    swap_short_pips: float = 0.0
+    # Broker-dependent values, filled in from a ForexCostProfile.
+    margin_rate: float = 0.02     # fraction of notional held as margin (2% = 50:1)
+    typical_spread_pips: float = 0.0      # normal-hours spread
+    rollover_spread_multiplier: float = 1.0  # spread widening 21:00-23:00 UTC
+    commission_per_10k_per_side: float = 0.0  # account currency, 0 on spread-only accounts
+    swap_long_per_100k: float = 0.0   # account currency per 100k units per night (+ = credit)
+    swap_short_per_100k: float = 0.0
+    account_currency: str = "USD"     # currency the commission and swap figures are in
     triple_swap_weekday: int = 2  # Wednesday rollover books the weekend (T+2 spot)
 
     def __post_init__(self) -> None:
@@ -113,36 +117,41 @@ class ForexPairSpec:
             return 0  # no rollover on Sat/Sun
         return 3 if wd == self.triple_swap_weekday else 1
 
-    def swap_pips(self, side: int, rollover_day: date) -> float:
-        per_night = self.swap_long_pips if side > 0 else self.swap_short_pips
-        return per_night * self.swap_nights(rollover_day)
+    def swap_amount(self, side: int, units: float, rollover_day: date) -> float:
+        """Financing booked at the rollover on ``rollover_day``, in
+        ``account_currency``. Negative is a charge, positive a credit."""
+        per_100k = self.swap_long_per_100k if side > 0 else self.swap_short_per_100k
+        return per_100k * abs(units) / 100_000 * self.swap_nights(rollover_day)
+
+    # ---- trading costs ---------------------------------------------------
+    def spread_pips(self, in_rollover: bool = False) -> float:
+        return self.typical_spread_pips * (self.rollover_spread_multiplier if in_rollover else 1.0)
+
+    def commission(self, units: float, sides: int = 2) -> float:
+        return self.commission_per_10k_per_side * abs(units) / 10_000 * sides
 
 
-def _pair(base: str, quote: str, **kw) -> ForexPairSpec:
-    jpy = quote == "JPY"
-    return ForexPairSpec(
-        symbol=f"{base}_{quote}", base=base, quote=quote,
-        pip_size=0.01 if jpy else 0.0001, price_precision=3 if jpy else 5, **kw,
+_MAJORS = ("EUR_USD", "GBP_USD", "AUD_USD", "USD_JPY", "USD_CHF", "USD_CAD", "EUR_JPY")
+
+# Market-convention specs only. Costs come from a ForexCostProfile.
+PAIRS: Dict[str, ForexPairSpec] = {}
+for _sym in _MAJORS:
+    _base, _quote = _sym.split("_")
+    _jpy = _quote == "JPY"
+    PAIRS[_sym] = ForexPairSpec(
+        symbol=_sym, base=_base, quote=_quote,
+        pip_size=0.01 if _jpy else 0.0001, price_precision=3 if _jpy else 5,
     )
 
 
-PAIRS: Dict[str, ForexPairSpec] = {
-    p.symbol: p
-    for p in (
-        _pair("EUR", "USD", typical_spread_pips=0.8),
-        _pair("GBP", "USD", typical_spread_pips=1.2),
-        _pair("AUD", "USD", typical_spread_pips=1.0),
-        _pair("USD", "JPY", typical_spread_pips=1.0),
-        _pair("USD", "CHF", typical_spread_pips=1.5),
-        _pair("USD", "CAD", typical_spread_pips=1.6),
-        _pair("EUR", "JPY", typical_spread_pips=1.6),
-    )
-}
+def get_pair(symbol: str, profile: Optional["ForexCostProfile"] = PAPER_DEFAULT) -> ForexPairSpec:
+    """Pair spec with ``profile``'s costs applied.
 
-
-def get_pair(symbol: str) -> ForexPairSpec:
+    Pass ``profile=None`` for the bare market-convention spec (zero costs).
+    """
     key = symbol.upper().replace("/", "_")
     try:
-        return PAIRS[key]
+        spec = PAIRS[key]
     except KeyError:
         raise KeyError(f"unknown FX pair {symbol!r}; known: {sorted(PAIRS)}") from None
+    return spec if profile is None else profile.apply(spec)

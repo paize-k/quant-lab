@@ -68,9 +68,20 @@ import the existing indicators, and keeps your notebook imports valid.
 `tests/test_isolation.py` fails the build if `futures` and `forex` ever
 import each other, or if `core` imports either.
 
-## Values to confirm
+## Fees, margins and spreads
 
 Tick sizes, tick values, contract months and pip sizes follow exchange and
-market convention. **Margins, commissions, exchange/NFA fees, typical spreads
-and swap rates are placeholders.** Set them from your broker before trusting
-any sizing or P&L number.
+market convention and live on the specs. Everything that depends on the
+broker lives in a swappable profile:
+
+* `quant_lab.futures.config.fees.FuturesBrokerProfile`: commission,
+  exchange/NFA/clearing fees, slippage, day/initial/maintenance margin.
+* `quant_lab.forex.config.costs.ForexCostProfile`: spread, commission,
+  swap per 100k per night, margin rate, rollover spread widening.
+
+`get_contract(symbol)` and `get_pair(symbol)` apply `PAPER_DEFAULT`, a
+conservative profile researched on 2026-11-27 from published retail figures
+(sources are in each module's docstring). Pass `profile=YOUR_BROKER` once you
+have real numbers, or `profile=None` for zero-cost specs. MGC and 6E exchange
+fees could not be found and are estimates marked `verified=False`; FX swap
+rates are from February 2026 and should be replaced with live rates.

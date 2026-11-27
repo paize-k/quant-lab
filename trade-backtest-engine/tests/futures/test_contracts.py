@@ -5,7 +5,9 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from quant_lab.core import InstrumentSpec
-from quant_lab.futures.config import FuturesRiskLimits, get_contract, get_sessions
+from quant_lab.futures.config import (
+    PAPER_DEFAULT, FuturesBrokerProfile, FuturesFeeSchedule, FuturesRiskLimits, get_contract, get_sessions,
+)
 
 CT = ZoneInfo("America/Chicago")
 
@@ -32,13 +34,13 @@ def test_tick_math_and_pnl():
 
 def test_fees_and_slippage():
     mes = replace(get_contract("MES"), commission_per_side=0.5, exchange_fee_per_side=0.3,
-                  regulatory_fee_per_side=0.02)
+                  regulatory_fee_per_side=0.02, clearing_fee_per_side=0.0)
     assert mes.round_trip_fees(3) == pytest.approx(2 * 0.82 * 3)
     assert mes.slippage_cost(3) == pytest.approx(1 * 1.25 * 3 * 2)
 
 
 def test_contracts_for_risk_capped_by_margin():
-    mes = replace(get_contract("MES"), intraday_margin=500.0)
+    mes = replace(get_contract("MES"), intraday_margin=500.0, initial_margin=2_400.0, maintenance_margin=2_200.0)
     # $50k * 1% / (8 ticks * $1.25) = 50 contracts
     assert mes.contracts_for_risk(50_000, 0.01, 8) == 50
     assert mes.contracts_for_risk(50_000, 0.01, 8, available_margin=10_000) == 20
@@ -70,3 +72,24 @@ def test_risk_limits_validate():
     assert FuturesRiskLimits().max_daily_loss == 0.02
     with pytest.raises(ValueError):
         FuturesRiskLimits(risk_per_trade=2.0)
+
+
+def test_paper_default_profile_applied():
+    mes = get_contract("MES")
+    # $0.39 commission + $0.35 CME + $0.02 NFA + $0.19 clearing, both sides
+    assert mes.round_trip_fees(1) == pytest.approx(1.90)
+    assert mes.intraday_margin == 50 and mes.initial_margin > mes.maintenance_margin > 0
+    assert all(sym in PAPER_DEFAULT.schedules for sym in ("MES", "MNQ", "MGC", "6E"))
+    assert not PAPER_DEFAULT.schedule("6E").verified
+    bare = get_contract("MES", profile=None)
+    assert bare.round_trip_fees(1) == 0 and bare.initial_margin == 0
+
+
+def test_custom_profile_swaps_in():
+    cheap = FuturesBrokerProfile("cheap", "2026-11-27", {
+        "MES": FuturesFeeSchedule(0.25, 0.35, 0.02, 0.0, 40.0, 2_000.0, 1_800.0)})
+    mes = get_contract("MES", profile=cheap)
+    assert mes.round_trip_fees(1) == pytest.approx(1.24)
+    assert mes.margin_per_contract() == 40
+    with pytest.raises(KeyError):
+        get_contract("MNQ", profile=cheap)
