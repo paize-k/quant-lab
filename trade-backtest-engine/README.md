@@ -26,7 +26,7 @@ Two isolated engines are being added on top of the research backtester:
 - `quant_lab.futures`: CME futures (MES, MNQ, MGC, 6E) contract specs, Globex/RTH sessions and risk limits.
 - `quant_lab.forex`: spot FX pair specs (pip size, pip value conversion, swaps), UTC session windows and risk limits.
 
-`futures` and `forex` never import each other. See `docs/milestone-1-audit.md`.
+`futures` and `forex` never import each other. See `docs/milestone-1-audit.md` and `docs/milestone-2-futures.md` (futures backtester, strategies, walk-forward and Monte Carlo).
 
 ## Current Results
 (Coming soon)

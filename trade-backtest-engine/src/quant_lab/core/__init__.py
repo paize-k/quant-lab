@@ -19,3 +19,17 @@ __all__ = [
     "BaseStrategy", "StrategyState", "InstrumentSpec", "TimeWindow",
     "floor_to_step", "size_by_risk", "bars_from_dataframe", "normalize_ohlcv",
 ]
+
+# Backtesting, metrics and validation (Milestone 2)
+from quant_lab.core.engine import (  # noqa: E402
+    Backtester, BacktestConfig, BacktestResult, ExecutionModel, ScaleOutRule, Trade,
+)
+from quant_lab.core.metrics import compare, max_drawdown_pct, tear_sheet  # noqa: E402
+from quant_lab.core.monte_carlo import MonteCarloReport, reshuffle  # noqa: E402
+from quant_lab.core.wfo import WalkForwardReport, param_grid, walk_forward  # noqa: E402
+
+__all__ += [
+    "Backtester", "BacktestConfig", "BacktestResult", "ExecutionModel", "ScaleOutRule", "Trade",
+    "compare", "max_drawdown_pct", "tear_sheet", "MonteCarloReport", "reshuffle",
+    "WalkForwardReport", "param_grid", "walk_forward",
+]
