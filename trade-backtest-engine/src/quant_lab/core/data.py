@@ -49,13 +49,21 @@ def normalize_ohlcv(df: pd.DataFrame, tz: str = "UTC", ticker: Optional[str] = N
     out = out.sort_index()
     out = out[~out.index.duplicated(keep="first")]
     keep = ["open", "high", "low", "close", "volume"] + [c for c in _QUOTE_COLS if c in out.columns]
+    if "contract" in out.columns:  # per-bar contract code from a continuous futures series
+        keep.append("contract")
     return out[keep].dropna(subset=["open", "high", "low", "close"])
 
 
 def bars_from_dataframe(df: pd.DataFrame, symbol: str = "", tz: str = "UTC") -> Iterator[Bar]:
-    """Yield closed ``Bar`` objects in time order from an OHLCV DataFrame."""
+    """Yield closed ``Bar`` objects in time order from an OHLCV DataFrame.
+
+    The index must already be bar *close* times. A ``contract`` column (as
+    produced by ``futures.data.rollover``) overrides ``symbol`` per bar, so
+    the engine can see when a continuous series rolls.
+    """
     norm = normalize_ohlcv(df, tz=tz)
     quote_cols = [c for c in _QUOTE_COLS if c in norm.columns]
+    has_contract = "contract" in norm.columns
     for ts, row in norm.iterrows():
         quotes = {c: float(row[c]) for c in quote_cols if pd.notna(row[c])}
         yield Bar(
@@ -65,6 +73,6 @@ def bars_from_dataframe(df: pd.DataFrame, symbol: str = "", tz: str = "UTC") -> 
             low=float(row["low"]),
             close=float(row["close"]),
             volume=float(row["volume"]) if pd.notna(row["volume"]) else 0.0,
-            symbol=symbol,
+            symbol=str(row["contract"]) if has_contract else symbol,
             **quotes,
         )
